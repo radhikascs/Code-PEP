@@ -1,0 +1,171 @@
+version: "3"
+
+services:
+    laravel_db:
+        image: mysql:8.1
+        container_name: mysql_8
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: laravel_db
+            MYSQL_USER: pcs_db_user
+            MYSQL_PASSWORD: laravel_db
+        ports:
+            - "3306:3306"
+        volumes:
+            # - ./laravel_db:/var/lib/mysql
+            - ./init_db:/docker-entrypoint-initdb.d
+        healthcheck:
+            test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+            timeout: 20s
+            retries: 10
+        networks:
+            - backend
+
+    redis_cache:
+        image: redis/redis-stack:latest
+        sysctls:
+        - net.core.somaxconn=511
+        ports:
+            - "6379:6379"
+            - "8001:8001"
+        networks:
+            - backend
+
+    webserver:
+        image: nginx:latest
+        ports:
+            - "9000:80"
+            # - "4200:4200"
+        volumes:
+            # - ./PCSLaravel:/var/www/html
+            - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+            - ./public:/var/www/html/public
+        depends_on:
+            - pcs_laravel
+        networks:
+            - backend
+
+    pcs_laravel:
+        build:
+            context: ./PCSLaravel
+            dockerfile: Dockerfile
+        # restart: on-failure
+        volumes:
+            # - \\wsl.localhost\Ubuntu-18.04\home\akram\PCS\PCSLaravel:/var/www/html
+            - ./PCSLaravel:/var/www/html
+            # ignore below direcory for mount
+            - /var/www/html/vendor
+            - /var/www/html/bootstrap
+            - /var/www/html/public
+            - /var/www/html/resources
+            - /var/www/html/tests
+            # if you want to mount particular directory
+            # - ./PCSLaravel/app:/var/www/html/app
+            # - ./PCSLaravel/storage:/var/www/html/storage
+        depends_on:
+            - laravel_db
+        networks:
+            - backend
+
+    adminer:
+        image: adminer
+        ports:
+            - "8080:8080"
+
+
+    accountmgt:
+        build:
+            dockerfile: AccountMgt/AccountMgt.Dockerfile
+        command: python manage.py runserver 0.0.0.0:8000
+        ports:
+            - "8000:8000"
+        volumes:
+            - ./AccountMgt/:/AccountMgt
+        restart: on-failure
+        depends_on:
+            laravel_db:
+                condition: service_healthy
+        env_file:
+            - AccountMgt/.env
+        networks:
+            - backend
+
+    reports:
+        container_name: Reports
+        build:
+    #      context: ./Reports
+            dockerfile: Reports/Reports.Dockerfile
+        command: python manage.py runserver 0.0.0.0:8003
+        ports:
+            - "8003:8003"
+        volumes:
+            - ./Reports/:/Reports
+        restart: on-failure
+        depends_on:
+            laravel_db:
+                condition: service_healthy
+        env_file:
+            - ./Reports/.env
+        networks:
+            - backend
+
+    rule-engine:
+        build:
+            dockerfile: PCSRuleEngine/RuleEngine.Dockerfile
+        working_dir: /PCSRuleEngine
+        # entrypoint: '/bin/bash /AccountMgt/AccountMgt/docker-entrypoint.sh'
+        command: python manage.py runserver 0.0.0.0:8004
+    #    command: tail -f /dev/null
+        ports:
+            - "8004:8004"
+        volumes:
+            - ./PCSRuleEngine/:/PCSRuleEngine
+        restart: on-failure
+        depends_on:
+            laravel_db:
+                condition: service_healthy
+        env_file:
+            - PCSRuleEngine/.env
+        networks:
+            - backend
+
+    background-task:
+        build:
+            dockerfile: PCSCelery/PCSCelery.Dockerfile
+        command: celery -A PCSBackgroudWorker worker -l INFO
+        ports:
+            - "8005:8000"
+        volumes:
+            - ./PCSCelery/:/PCSCelery
+        env_file:
+            - PCSCelery/.env
+        depends_on:
+            - redis_cache
+        networks:
+            - backend
+
+    pcs-python:
+        build:
+            dockerfile: PCSPython/PCSPython.Dockerfile
+        working_dir: /PCSPython
+        command: python manage.py runserver 0.0.0.0:8006
+        ports:
+            - "8006:8006"
+        volumes:
+            - ./PCSPython/:/PCSPython
+        restart: on-failure
+        depends_on:
+            laravel_db:
+                condition: service_healthy
+        env_file:
+            - PCSPython/PCSPython/.env
+        networks:
+            - backend
+
+volumes:
+    laravel_db:
+
+networks:
+    backend:
+        name: backend
+        driver: bridge

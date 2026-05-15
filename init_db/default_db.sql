@@ -1,0 +1,10 @@
+CREATE DATABASE IF NOT EXISTS pcs_users_db;
+GRANT ALL ON `pcs_users_db`.* TO 'pcs_db_user'@'%';
+CREATE DATABASE IF NOT EXISTS pcs_accounts_db;
+GRANT ALL ON `pcs_accounts_db`.* TO 'pcs_db_user'@'%';
+CREATE DATABASE IF NOT EXISTS pcs_documents_db;
+GRANT ALL ON `pcs_documents_db`.* TO 'pcs_db_user'@'%';
+CREATE DATABASE IF NOT EXISTS pcs_welath_db;
+GRANT ALL ON `pcs_welath_db`.* TO 'pcs_db_user'@'%';
+CREATE DATABASE IF NOT EXISTS pcs_rule_engine_db;
+GRANT ALL ON `pcs_rule_engine_db`.* TO 'pcs_db_user'@'%';
